@@ -55,6 +55,8 @@ func NewOpenerCmd(errOut io.Writer) *cobra.Command {
 
 	cmd.Flags().StringVar(&configPath, "config", configPath, "Path to the opener config file (defaults to ~/.config/opener/config.yaml)")
 
+	cmd.AddCommand(newOpenCmd(errOut))
+
 	return cmd
 }
 
@@ -139,6 +141,24 @@ var openURL = func(line string) (string, error) {
 	return buf.String(), err
 }
 
+// openRequestURL resolves a Chrome profile and launches Chrome directly when
+// req names an account email that resolves and Chrome can be found;
+// otherwise it falls back to the inherited default-browser-aware openURL —
+// covering no email, an email that resolves to nothing, an unreadable Local
+// State, and no Chrome binary found. The fallback never fails the open.
+func openRequestURL(req openRequest) (string, error) {
+	if req.ChromeProfileEmail != "" {
+		if dir, ok := resolveChromeProfileDir(req.ChromeProfileEmail); ok {
+			if chromeBinary := findChromeBinary(); chromeBinary != "" {
+				if err := launchChromeAtProfile(chromeBinary, dir, req.URL); err == nil {
+					return "", nil
+				}
+			}
+		}
+	}
+	return openURL(req.URL)
+}
+
 func handleConnection(conn net.Conn, errOut io.Writer) {
 	defer conn.Close()
 
@@ -152,14 +172,15 @@ func handleConnection(conn net.Conn, errOut io.Writer) {
 		}
 	}
 
-	logs, err := openURL(line)
+	req := parseOpenRequest(line)
+	logs, err := openRequestURL(req)
 
 	if logs != "" {
 		fmt.Fprint(errOut, logs)
 	}
 
 	if err != nil {
-		fmt.Fprintf(errOut, "failed to open %q: %v\n", line, err)
+		fmt.Fprintf(errOut, "failed to open %q: %v\n", req.URL, err)
 
 		// Send back the logs from `open` to the client over e.g. the unix domain socket, so that
 		// `open` on the client machine would work more like that on the server.
