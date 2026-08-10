@@ -10,6 +10,14 @@ import "encoding/json"
 type openRequest struct {
 	URL                string `json:"url"`
 	ChromeProfileEmail string `json:"chrome_profile_email,omitempty"`
+	Query              string `json:"query,omitempty"`
+}
+
+// isStatusQuery reports whether the line asked this daemon about itself
+// rather than for an open: a JSON object carrying query=status and no url.
+// A bare URL line always parses into URL, so it can never look like a query.
+func (r openRequest) isStatusQuery() bool {
+	return r.Query == "status" && r.URL == ""
 }
 
 func parseOpenRequest(line string) openRequest {

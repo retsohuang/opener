@@ -174,6 +174,13 @@ func handleConnection(conn net.Conn, errOut io.Writer) {
 
 	req := parseOpenRequest(line)
 
+	// A status query asks about this host instead of asking for an open, so it
+	// is answered on the same listener and never reaches the browser path.
+	if req.isStatusQuery() {
+		writeStatusResponse(conn, errOut)
+		return
+	}
+
 	// Liveness probes (smart-open's health check, perch's opener-bridge
 	// collector) connect and close without sending a URL. Opening the
 	// resulting empty string would open a Finder window on this machine.

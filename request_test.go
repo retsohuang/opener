@@ -41,3 +41,50 @@ func TestParseOpenRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestParseOpenRequestStatusQuery(t *testing.T) {
+	cases := []struct {
+		name  string
+		line  string
+		query bool
+	}{
+		{
+			name:  "status query",
+			line:  `{"query":"status"}`,
+			query: true,
+		},
+		{
+			name:  "another query value is not a status query",
+			line:  `{"query":"whatever"}`,
+			query: false,
+		},
+		{
+			name:  "a query alongside a url stays an open request",
+			line:  `{"query":"status","url":"https://example.com/a"}`,
+			query: false,
+		},
+		{
+			name:  "an open request is not a status query",
+			line:  `{"url":"https://example.com/a"}`,
+			query: false,
+		},
+		{
+			name:  "a bare url line is not a status query",
+			line:  "https://example.com/c",
+			query: false,
+		},
+		{
+			name:  "a bare line that mentions status is not a status query",
+			line:  "status",
+			query: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseOpenRequest(tc.line).isStatusQuery(); got != tc.query {
+				t.Errorf("isStatusQuery() = %v, want %v", got, tc.query)
+			}
+		})
+	}
+}
