@@ -173,6 +173,14 @@ func handleConnection(conn net.Conn, errOut io.Writer) {
 	}
 
 	req := parseOpenRequest(line)
+
+	// Liveness probes (smart-open's health check, perch's opener-bridge
+	// collector) connect and close without sending a URL. Opening the
+	// resulting empty string would open a Finder window on this machine.
+	if req.URL == "" {
+		return
+	}
+
 	logs, err := openRequestURL(req)
 
 	if logs != "" {

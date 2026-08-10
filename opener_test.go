@@ -118,3 +118,65 @@ func TestHandleConnection(t *testing.T) {
 		})
 	}
 }
+
+// A liveness probe (perch's opener-bridge, smart-open's health check) connects
+// and closes without writing a URL. The daemon must not translate that into an
+// open of "" — on macOS `open ""` opens a Finder window on the daemon's machine.
+func TestHandleConnectionEmptyProbe(t *testing.T) {
+	tt := []struct {
+		test string
+		send func(client net.Conn)
+	}{
+		{
+			"connect-and-close probe must not open",
+			func(client net.Conn) { client.Close() },
+		},
+		{
+			"bare newline must not open",
+			func(client net.Conn) {
+				client.Write([]byte("\n"))
+				client.Close()
+			},
+		},
+		{
+			"empty-url JSON must not open",
+			func(client net.Conn) {
+				client.Write([]byte(`{"url":""}` + "\n"))
+				client.Close()
+			},
+		},
+	}
+
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+
+	for _, tc := range tt {
+		t.Run(tc.test, func(t *testing.T) {
+			opened := make(chan string, 1)
+			openURL = func(line string) (string, error) {
+				opened <- line
+				return "", nil
+			}
+
+			done := make(chan struct{})
+			go func() {
+				conn, _ := ln.Accept()
+				handleConnection(conn, io.Discard)
+				close(done)
+			}()
+
+			client, err := net.Dial("tcp", ln.Addr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.send(client)
+			<-done
+
+			select {
+			case line := <-opened:
+				t.Errorf("expected no open, but openURL was called with %q", line)
+			default:
+			}
+		})
+	}
+}
