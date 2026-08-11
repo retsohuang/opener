@@ -8,7 +8,9 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -115,7 +117,34 @@ func (o *OpenerOptions) Run() error {
 
 var browserMu sync.Mutex
 
+// macOpenBinary is macOS's open(1), addressed by absolute path on purpose:
+// a PATH lookup can resolve to a wrapper that routes URLs back into opener
+// (the smart-open shim does exactly that), which turns this terminal open
+// into an unbounded process cycle.
+const macOpenBinary = "/usr/bin/open"
+
+// runOpenCommand is the exec seam tests stub to assert what gets launched.
+var runOpenCommand = func(name string, args ...string) (string, error) {
+	var buf bytes.Buffer
+
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	err := cmd.Run()
+
+	return buf.String(), err
+}
+
 var openURL = func(line string) (string, error) {
+	if runtime.GOOS == "darwin" {
+		return runOpenCommand(macOpenBinary, line)
+	}
+
+	return browserOpenURL(line)
+}
+
+func browserOpenURL(line string) (string, error) {
 	// We try out best avoiding race-condition on swapping browser.{Stdout,Stderr}.
 	// This works in a case when there are two or more consumers exist for this package.
 	//
