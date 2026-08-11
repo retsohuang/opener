@@ -134,14 +134,14 @@ func TestHandleConnectionEmptyProbe(t *testing.T) {
 		{
 			"bare newline must not open",
 			func(client net.Conn) {
-				client.Write([]byte("\n"))
+				_, _ = client.Write([]byte("\n"))
 				client.Close()
 			},
 		},
 		{
 			"empty-url JSON must not open",
 			func(client net.Conn) {
-				client.Write([]byte(`{"url":""}` + "\n"))
+				_, _ = client.Write([]byte(`{"url":""}` + "\n"))
 				client.Close()
 			},
 		},
